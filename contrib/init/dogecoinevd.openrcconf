@@ -1,0 +1,33 @@
+# /etc/conf.d/dogecoinevd: config file for /etc/init.d/dogecoinevd
+
+# Config file location
+#ELONCOIND_CONFIGFILE="/etc/dogecoinev/dogecoinev.conf"
+
+# What directory to write pidfile to?  (created and owned by $ELONCOIND_USER)
+#ELONCOIND_PIDDIR="/var/run/dogecoinevd"
+
+# What filename to give the pidfile
+#ELONCOIND_PIDFILE="${ELONCOIND_PIDDIR}/dogecoinevd.pid"
+
+# Where to write dogecoinevd data (be mindful that the blockchain is large)
+#ELONCOIND_DATADIR="/var/lib/dogecoinevd"
+
+# User and group to own dogecoinevd process
+#ELONCOIND_USER="dogecoinev"
+#ELONCOIND_GROUP="dogecoinev"
+
+# Path to dogecoinevd executable
+#ELONCOIND_BIN="/usr/bin/dogecoinevd"
+
+# Nice value to run dogecoinevd under
+#ELONCOIND_NICE=0
+
+# Additional options (avoid -conf and -datadir, use flags above)
+ELONCOIND_OPTS="-disablewallet"
+
+# The timeout in seconds OpenRC will wait for dogecoinevd to terminate
+# after a SIGTERM has been raised.
+# Note that this will be mapped as argument to start-stop-daemon's
+# '--retry' option, which means you can specify a retry schedule
+# here. For more information see man 8 start-stop-daemon.
+ELONCOIND_SIGTERM_TIMEOUT=60

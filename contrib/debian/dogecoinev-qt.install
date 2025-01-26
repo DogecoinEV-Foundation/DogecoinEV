@@ -1,0 +1,6 @@
+usr/local/bin/dogecoinev-qt usr/bin
+share/pixmaps/dogecoinev32.xpm usr/share/pixmaps
+share/pixmaps/dogecoinev16.xpm usr/share/pixmaps
+share/pixmaps/dogecoinev128.png usr/share/pixmaps
+debian/dogecoinev-qt.desktop usr/share/applications
+debian/dogecoinev-qt.protocol usr/share/kde4/services/

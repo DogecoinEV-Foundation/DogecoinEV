@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=DogecoinEV Core
+Comment=Connect to the DogecoinEV P2P Network
+Comment[de]=Verbinde mit dem DogecoinEV peer-to-peer Netzwerk
+Comment[fr]=DogecoinEV, monnaie virtuelle cryptographique pair à pair
+Comment[tr]=DogecoinEV, eşten eşe kriptografik sanal para birimi
+Exec=dogecoinev-qt %u
+Terminal=false
+Type=Application
+Icon=dogecoinev128
+MimeType=x-scheme-handler/dogecoinev;
+Categories=Office;Finance;
