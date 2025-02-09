@@ -83,3 +83,18 @@ Connect with the growing DEV community and contribute to the project:
 DEV (Doge Elon Vision) is more than just a fork of Dogecoin—it’s a step forward in creating a blockchain that is scalable, inclusive, and ready for mass adoption. By retaining Dogecoin's humor and charm while addressing scalability concerns, DEV is poised to become the cryptocurrency of the future.
 
 For developers, miners, and crypto enthusiasts alike, DEV offers an opportunity to be part of a community-driven project with limitless potential. Join us in building the next era of decentralized finance, powered by the vision of scalability and efficiency. 🚀
+
+
+
+CONF : 
+rpcuser=1234
+rpcpassword=1234
+dns=1
+irc=1
+listen=1
+dnsseed=1
+daemon=1
+server=1
+rpcport=42069
+allowip=127.0.0.1
+debug=1
