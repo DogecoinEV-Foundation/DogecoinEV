@@ -73,7 +73,7 @@ DEV embraces the fun, inclusive, and community-driven spirit of Dogecoin, while 
 
 Connect with the growing DEV community and contribute to the project:
 
-- **X (formerly Twitter)**: [@DogeElonVision](https://x.com/dogeelonvision)  
+- **X (formerly Twitter)**: [@DogecoinEV_](https://x.com/dogecoinev_)  
 - **Telegram**: [Doge Elon Vision Community](https://t.me/DogeElonVision)
 
 ---
