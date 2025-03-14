@@ -98,3 +98,6 @@ server=1
 rpcport=42069
 allowip=127.0.0.1
 debug=1
+addnode=64.94.84.112:42069
+addnode=207.244.232.43:42069
+
