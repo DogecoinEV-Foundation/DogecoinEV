@@ -490,7 +490,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-blockmaxsize=<n>", strprintf(_("Set maximum block size in bytes (default: %d)"), DEFAULT_BLOCK_MAX_SIZE));
     strUsage += HelpMessageOpt("-blockprioritysize=<n>", strprintf(_("Set maximum size of high-priority/low-fee transactions in bytes (default: %d)"), DEFAULT_BLOCK_PRIORITY_SIZE));
     strUsage += HelpMessageOpt("-blockmintxfee=<amt>", strprintf(_("Set lowest fee rate (in %s/kB) for transactions to be included in block creation. (default: %s)"), CURRENCY_UNIT, FormatMoney(DEFAULT_BLOCK_MIN_TX_FEE)));
-    strUsage += HelpMessageOpt("-mineraddress=<addr>", _("Override development fund address for mining (P2SH address recommended)"));
+    strUsage += HelpMessageOpt("-mineraddress=<addr>", _("Specify address for miner block rewards (default: wallet address)"));
     if (showDebug)
         strUsage += HelpMessageOpt("-blockversion=<n>", "Override block version to test forking scenarios");
 
@@ -1063,11 +1063,6 @@ bool AppInitParameterInteraction()
         CBitcoinAddress address(minerAddress);
         if (!address.IsValid())
             return InitError(strprintf(_("Invalid -mineraddress: '%s'"), minerAddress));
-
-        // Recommend P2SH addresses for development fund
-        CTxDestination dest = address.Get();
-        if (boost::get<CScriptID>(&dest) == nullptr)
-            InitWarning(_("Warning: -mineraddress should preferably be a P2SH address for better security"));
     }
 
     fRequireStandard = !GetBoolArg("-acceptnonstdtxn", !chainparams.RequireStandard());

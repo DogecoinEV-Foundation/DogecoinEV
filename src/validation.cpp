@@ -2032,14 +2032,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                            REJECT_INVALID, "bad-cb-devfund-amount");
         }
 
-        // Validate development fund script (unless custom mineraddress is used)
-        if (!IsArgSet("-mineraddress")) {
-            CScript expectedDevFundScript = chainparams.GetDevelopmentFundScriptAtHeight(pindex->nHeight);
-            if (coinbase.vout[1].scriptPubKey != expectedDevFundScript) {
-                return state.DoS(100,
-                               error("ConnectBlock(): coinbase development fund script incorrect"),
-                               REJECT_INVALID, "bad-cb-devfund-script");
-            }
+        // Validate development fund script (must match chainparams)
+        CScript expectedDevFundScript = chainparams.GetDevelopmentFundScriptAtHeight(pindex->nHeight);
+        if (coinbase.vout[1].scriptPubKey != expectedDevFundScript) {
+            return state.DoS(100,
+                           error("ConnectBlock(): coinbase development fund script incorrect"),
+                           REJECT_INVALID, "bad-cb-devfund-script");
         }
 
         // Validate total doesn't exceed allowed amount
