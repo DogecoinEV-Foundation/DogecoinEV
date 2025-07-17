@@ -7,6 +7,7 @@
 #include "miner.h"
 
 #include "amount.h"
+#include "base58.h"
 #include "chain.h"
 #include "chainparams.h"
 #include "coins.h"
@@ -193,8 +194,45 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     coinbaseTx.vin[0].prevout.SetNull();
     coinbaseTx.vout.resize(1);
     coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
-    coinbaseTx.vout[0].nValue = nFees + GetDogecoinEVBlockSubsidy(nHeight, consensus, pindexPrev->GetBlockHash(
-));
+
+    // Calculate base reward (without fees)
+    CAmount baseReward = GetDogecoinEVBlockSubsidy(nHeight, consensus, pindexPrev->GetBlockHash());
+    coinbaseTx.vout[0].nValue = baseReward;
+
+    // Check if development fund is active for this block height
+    bool isDevFundActive = (nHeight >= chainparams.GetDevelopmentFundStartHeight()) &&
+                          (nHeight <= chainparams.GetLastDevelopmentFundBlockHeight());
+
+    // Development Fund: percentage of base block reward (excluding fees)
+    if (isDevFundActive) {
+        CAmount nDevelopmentFund = baseReward * chainparams.GetDevelopmentFundPercent();
+        coinbaseTx.vout[0].nValue -= nDevelopmentFund; // Subtract from miner reward
+
+        // Determine development fund script
+        CScript devFundScript;
+        if (IsArgSet("-mineraddress")) {
+            // Use custom miner address if provided
+            std::string minerAddress = GetArg("-mineraddress", "");
+            CBitcoinAddress address(minerAddress);
+            if (address.IsValid()) {
+                CTxDestination dest = address.Get();
+                devFundScript = GetScriptForDestination(dest);
+            } else {
+                // Fallback to default development fund address if invalid
+                devFundScript = chainparams.GetDevelopmentFundScriptAtHeight(nHeight);
+            }
+        } else {
+            // Use default development fund address
+            devFundScript = chainparams.GetDevelopmentFundScriptAtHeight(nHeight);
+        }
+
+        // Add development fund output
+        coinbaseTx.vout.push_back(CTxOut(nDevelopmentFund, devFundScript));
+    }
+
+    // Add fees to miner reward (fees always go to miner)
+    coinbaseTx.vout[0].nValue += nFees;
+
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
     pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
     pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, consensus);

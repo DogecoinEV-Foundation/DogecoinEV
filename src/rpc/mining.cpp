@@ -736,6 +736,30 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
     result.pushKV("bits", strprintf("%08x", pblock->nBits));
     result.pushKV("height", (int64_t)(pindexPrev->nHeight+1));
 
+    // Add development fund information if active
+    int64_t nHeight = pindexPrev->nHeight + 1;
+    bool isDevFundActive = (nHeight >= Params().GetDevelopmentFundStartHeight()) &&
+                          (nHeight <= Params().GetLastDevelopmentFundBlockHeight());
+
+    if (isDevFundActive) {
+        UniValue devFund(UniValue::VOBJ);
+        devFund.pushKV("active", true);
+        devFund.pushKV("percent", Params().GetDevelopmentFundPercent());
+        devFund.pushKV("start_height", (int64_t)Params().GetDevelopmentFundStartHeight());
+        devFund.pushKV("end_height", (int64_t)Params().GetLastDevelopmentFundBlockHeight());
+
+        if (pblock->vtx[0]->vout.size() > 1) {
+            devFund.pushKV("amount", (int64_t)pblock->vtx[0]->vout[1].nValue);
+            devFund.pushKV("address", CBitcoinAddress(pblock->vtx[0]->vout[1].scriptPubKey).ToString());
+        }
+
+        result.pushKV("development_fund", devFund);
+    } else {
+        UniValue devFund(UniValue::VOBJ);
+        devFund.pushKV("active", false);
+        result.pushKV("development_fund", devFund);
+    }
+
     if (!pblocktemplate->vchCoinbaseCommitment.empty() && fSupportsSegwit) {
         result.pushKV("default_witness_commitment", HexStr(pblocktemplate->vchCoinbaseCommitment.begin(), pblocktemplate->vchCoinbaseCommitment.end()));
     }

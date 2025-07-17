@@ -1993,12 +1993,71 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     int64_t nTime3 = GetTimeMicros(); nTimeConnect += nTime3 - nTime2;
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime3 - nTime2), 0.001 * (nTime3 - nTime2) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime3 - nTime2) / (nInputs-1), nTimeConnect * 0.000001);
 
-    CAmount blockReward = nFees + GetDogecoinEVBlockSubsidy(pindex->nHeight, chainparams.GetConsensus(pindex->nHeight), hashPrevBlock);
-    if (block.vtx[0]->GetValueOut() > blockReward)
-        return state.DoS(100,
-                         error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
-                               block.vtx[0]->GetValueOut(), blockReward),
-                               REJECT_INVALID, "bad-cb-amount");
+    // Calculate base reward and validate coinbase outputs
+    CAmount baseReward = GetDogecoinEVBlockSubsidy(pindex->nHeight, chainparams.GetConsensus(pindex->nHeight), hashPrevBlock);
+    CAmount totalAllowedReward = nFees + baseReward;
+
+    // Check if development fund is active for this block height
+    bool isDevFundActive = (pindex->nHeight >= chainparams.GetDevelopmentFundStartHeight()) &&
+                          (pindex->nHeight <= chainparams.GetLastDevelopmentFundBlockHeight());
+
+    if (isDevFundActive) {
+        // With development fund active, validate the coinbase structure
+        const CTransaction& coinbase = *block.vtx[0];
+
+        if (coinbase.vout.size() < 2) {
+            return state.DoS(100,
+                           error("ConnectBlock(): coinbase missing development fund output (outputs=%d)",
+                                 coinbase.vout.size()),
+                           REJECT_INVALID, "bad-cb-devfund-missing");
+        }
+
+        // Calculate expected development fund amount
+        CAmount expectedDevFund = baseReward * chainparams.GetDevelopmentFundPercent();
+        CAmount expectedMinerReward = baseReward - expectedDevFund + nFees;
+
+        // Validate miner reward (first output)
+        if (coinbase.vout[0].nValue != expectedMinerReward) {
+            return state.DoS(100,
+                           error("ConnectBlock(): coinbase miner reward incorrect (actual=%d vs expected=%d)",
+                                 coinbase.vout[0].nValue, expectedMinerReward),
+                           REJECT_INVALID, "bad-cb-miner-amount");
+        }
+
+        // Validate development fund output (second output)
+        if (coinbase.vout[1].nValue != expectedDevFund) {
+            return state.DoS(100,
+                           error("ConnectBlock(): coinbase development fund amount incorrect (actual=%d vs expected=%d)",
+                                 coinbase.vout[1].nValue, expectedDevFund),
+                           REJECT_INVALID, "bad-cb-devfund-amount");
+        }
+
+        // Validate development fund script (unless custom mineraddress is used)
+        if (!IsArgSet("-mineraddress")) {
+            CScript expectedDevFundScript = chainparams.GetDevelopmentFundScriptAtHeight(pindex->nHeight);
+            if (coinbase.vout[1].scriptPubKey != expectedDevFundScript) {
+                return state.DoS(100,
+                               error("ConnectBlock(): coinbase development fund script incorrect"),
+                               REJECT_INVALID, "bad-cb-devfund-script");
+            }
+        }
+
+        // Validate total doesn't exceed allowed amount
+        if (coinbase.GetValueOut() > totalAllowedReward) {
+            return state.DoS(100,
+                           error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
+                                 coinbase.GetValueOut(), totalAllowedReward),
+                           REJECT_INVALID, "bad-cb-amount");
+        }
+    } else {
+        // No development fund - use original validation
+        if (block.vtx[0]->GetValueOut() > totalAllowedReward) {
+            return state.DoS(100,
+                           error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
+                                 block.vtx[0]->GetValueOut(), totalAllowedReward),
+                           REJECT_INVALID, "bad-cb-amount");
+        }
+    }
 
     if (!control.Wait())
         return state.DoS(100, false);

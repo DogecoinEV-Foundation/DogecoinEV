@@ -8,6 +8,7 @@
 #include "consensus/consensus.h"
 #include "consensus/merkle.h"
 #include "consensus/validation.h"
+#include "dogecoinev.h"
 #include "validation.h"
 #include "miner.h"
 #include "policy/policy.h"
@@ -525,6 +526,88 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
     // TestPackageSelection(chainparams, scriptPubKey, txFirst);
 
     fCheckpointsEnabled = true;
+}
+
+BOOST_AUTO_TEST_CASE(CreateNewBlock_development_fund)
+{
+    const CChainParams& chainparams = Params(CBaseChainParams::REGTEST);
+    CScript scriptPubKey = CScript() << ParseHex("0436d04f40a76a1094ea10b14a513b62bfd0b47472dda1c25aa9cf8266e53f3c4353680146177f8a3b328ed2c6e02f2b8e051d9d5ffc61a4e6ccabd03409109a5a") << OP_CHECKSIG;
+
+    std::unique_ptr<CBlockTemplate> pblocktemplate;
+
+    // Test development fund functionality
+    // For regtest, development fund is active from block 10 to 1000 with 10% rate
+
+    // Test block before development fund activation (block 5)
+    {
+        // Create a mock block index at height 4 (so next block is 5)
+        CBlockIndex mockIndex;
+        mockIndex.nHeight = 4;
+        CBlockIndex* originalTip = chainActive.Tip();
+        chainActive.SetTip(&mockIndex);
+
+        pblocktemplate = BlockAssembler(chainparams).CreateNewBlock(scriptPubKey, false);
+        BOOST_CHECK(pblocktemplate);
+
+        // Should have only 1 output (miner reward)
+        BOOST_CHECK_EQUAL(pblocktemplate->block.vtx[0]->vout.size(), 1);
+
+        // Restore original tip
+        chainActive.SetTip(originalTip);
+    }
+
+    // Test block during development fund activation (block 15)
+    {
+        // Create a mock block index at height 14 (so next block is 15)
+        CBlockIndex mockIndex;
+        mockIndex.nHeight = 14;
+        CBlockIndex* originalTip = chainActive.Tip();
+        mockIndex.pprev = originalTip;
+        chainActive.SetTip(&mockIndex);
+
+        pblocktemplate = BlockAssembler(chainparams).CreateNewBlock(scriptPubKey, false);
+        BOOST_CHECK(pblocktemplate);
+
+        // Should have 2 outputs (miner reward + development fund)
+        BOOST_CHECK_EQUAL(pblocktemplate->block.vtx[0]->vout.size(), 2);
+
+        // Calculate expected values
+        CAmount baseReward = GetDogecoinEVBlockSubsidy(15, chainparams.GetConsensus(15), uint256());
+        CAmount expectedDevFund = baseReward * chainparams.GetDevelopmentFundPercent();
+        CAmount expectedMinerReward = baseReward - expectedDevFund;
+
+        // Check development fund output (second output)
+        BOOST_CHECK_EQUAL(pblocktemplate->block.vtx[0]->vout[1].nValue, expectedDevFund);
+
+        // Check miner reward (first output, should be base reward - dev fund + fees)
+        // Note: fees are 0 in this test
+        BOOST_CHECK_EQUAL(pblocktemplate->block.vtx[0]->vout[0].nValue, expectedMinerReward);
+
+        // Check that development fund script matches expected
+        CScript expectedDevFundScript = chainparams.GetDevelopmentFundScriptAtHeight(15);
+        BOOST_CHECK(pblocktemplate->block.vtx[0]->vout[1].scriptPubKey == expectedDevFundScript);
+
+        // Restore original tip
+        chainActive.SetTip(originalTip);
+    }
+
+    // Test block after development fund deactivation (block 1500)
+    {
+        // Create a mock block index at height 1499 (so next block is 1500)
+        CBlockIndex mockIndex;
+        mockIndex.nHeight = 1499;
+        CBlockIndex* originalTip = chainActive.Tip();
+        chainActive.SetTip(&mockIndex);
+
+        pblocktemplate = BlockAssembler(chainparams).CreateNewBlock(scriptPubKey, false);
+        BOOST_CHECK(pblocktemplate);
+
+        // Should have only 1 output (miner reward)
+        BOOST_CHECK_EQUAL(pblocktemplate->block.vtx[0]->vout.size(), 1);
+
+        // Restore original tip
+        chainActive.SetTip(originalTip);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
