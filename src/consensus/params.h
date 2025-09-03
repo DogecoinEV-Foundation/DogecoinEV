@@ -10,6 +10,7 @@
 #include "uint256.h"
 #include <map>
 #include <string>
+#include <vector>
 
 namespace Consensus {
 
@@ -80,6 +81,14 @@ struct Params {
     int32_t nAuxpowChainId;
     bool fStrictChainId;
     bool fAllowLegacyBlocks;
+
+    /** Recovery hack parameters */
+    int nRecoveryActivationHeight;
+    int nRecoveryMintStartHeight;
+    int nRecoveryMintEndHeight;
+    std::vector<std::string> vBlockedAddresses;
+    std::string strRecoveryAddress;
+    int64_t nRecoveryAmountPerBlock;
 
     /** Height-aware consensus parameters */
     uint32_t nHeightEffective; // When these parameters come into use
