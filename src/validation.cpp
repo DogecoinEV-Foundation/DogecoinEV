@@ -140,6 +140,35 @@ bool CheckTransactionForBlockedAddresses(const CTransaction& tx, int nHeight, co
     return true;
 }
 
+/**
+ * Check if a transaction involves blocked addresses (with UTXO access)
+ */
+bool CheckTransactionForBlockedAddressesWithInputs(const CTransaction& tx, int nHeight, const Consensus::Params& consensusParams, const CCoinsViewCache& inputs)
+{
+    // Only check after activation height
+    if (nHeight < consensusParams.nRecoveryActivationHeight)
+        return true;
+        
+    // Check all inputs for blocked addresses (skip coinbase)
+    if (!tx.IsCoinBase()) {
+        for (const CTxIn& txin : tx.vin) {
+            const COutPoint& prevout = txin.prevout;
+            const CCoins* coins = inputs.AccessCoins(prevout.hash);
+            if (coins && coins->IsAvailable(prevout.n)) {
+                CTxDestination dest;
+                if (ExtractDestination(coins->vout[prevout.n].scriptPubKey, dest)) {
+                    std::string address = CBitcoinAddress(dest).ToString();
+                    if (IsAddressBlocked(address, nHeight, consensusParams)) {
+                        return false; // Transaction spends from blocked address
+                    }
+                }
+            }
+        }
+    }
+    
+    return true;
+}
+
 const std::string strMessageMagic = "DogecoinEV Signed Message:\n";
 
 // Internal stuff
@@ -794,6 +823,10 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState& state, const C
         // Check for non-standard pay-to-script-hash in inputs
         if (fRequireStandard && !AreInputsStandard(tx, view))
             return state.Invalid(false, REJECT_NONSTANDARD, "bad-txns-nonstandard-inputs");
+        
+        // Check for blocked addresses (recovery hack)
+        if (!CheckTransactionForBlockedAddressesWithInputs(tx, chainActive.Height() + 1, Params().GetConsensus(chainActive.Height() + 1), view))
+            return state.DoS(100, false, REJECT_INVALID, "bad-txns-blocked-address");
 
         // Check for non-standard witness in P2WSH
         if (tx.HasWitness() && fRequireStandard && !IsWitnessStandard(tx, view))
@@ -3197,10 +3230,7 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, const CB
             return state.DoS(10, false, REJECT_INVALID, "bad-txns-nonfinal", false, "non-final transaction");
         }
         
-        // Check for blocked addresses (recovery hack)
-        if (!CheckTransactionForBlockedAddresses(*tx, nHeight, consensusParams)) {
-            return state.DoS(100, false, REJECT_INVALID, "bad-txns-blocked-address", false, "transaction involves blocked address");
-        }
+        // Note: Blocked address filtering is now done at mining level, not validation level
     }
     
     // Check for recovery coinbase at specified height

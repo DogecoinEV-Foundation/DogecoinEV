@@ -594,4 +594,7 @@ void DumpMempool();
 /** Load the mempool from disk. */
 bool LoadMempool();
 
+/** Check if a transaction involves blocked addresses (with UTXO access) */
+bool CheckTransactionForBlockedAddressesWithInputs(const CTransaction& tx, int nHeight, const Consensus::Params& consensusParams, const CCoinsViewCache& inputs);
+
 #endif // BITCOIN_VALIDATION_H

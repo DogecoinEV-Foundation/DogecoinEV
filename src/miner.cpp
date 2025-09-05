@@ -285,6 +285,9 @@ bool BlockAssembler::TestPackageTransactions(const CTxMemPool::setEntries& packa
             return false;
         if (!fIncludeWitness && it->GetTx().HasWitness())
             return false;
+        
+        // Note: Blocked address filtering is handled at mempool acceptance level
+            
         if (fNeedSizeAccounting) {
             uint64_t nTxSize = ::GetSerializeSize(it->GetTx(), SER_NETWORK, PROTOCOL_VERSION);
             if (nPotentialBlockSize + nTxSize >= nBlockMaxSize) {
