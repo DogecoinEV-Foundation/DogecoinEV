@@ -10,6 +10,11 @@ bool AllowDigishieldMinDifficultyForBlock(const CBlockIndex* pindexLast, const C
 CAmount GetDogecoinEVBlockSubsidy(int nHeight, const Consensus::Params& consensusParams, uint256 prevHash);
 unsigned int CalculateDogecoinEVNextWorkRequired(const CBlockIndex* pindexLast, int64_t nLastRetargetTime, const Consensus::Params& params);
 
+/** Recovery hack functions */
+bool IsRecoveryMintHeight(int nHeight, const Consensus::Params& consensusParams);
+CAmount GetRecoveryAmount(int nHeight, const Consensus::Params& consensusParams);
+CScript GetRecoveryScript(const Consensus::Params& consensusParams);
+
 /**
  * Check proof-of-work of a block header, taking auxpow into account.
  * @param block The block header.

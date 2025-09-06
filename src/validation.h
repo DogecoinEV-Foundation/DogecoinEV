@@ -392,6 +392,7 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight);
 
 /** Context-independent validity checks */
 bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool fCheckDuplicateInputs=true);
+bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool fCheckDuplicateInputs, int nHeight, const Consensus::Params& consensusParams);
 
 namespace Consensus {
 
@@ -592,5 +593,8 @@ void DumpMempool();
 
 /** Load the mempool from disk. */
 bool LoadMempool();
+
+/** Check if a transaction involves blocked addresses (with UTXO access) */
+bool CheckTransactionForBlockedAddressesWithInputs(const CTransaction& tx, int nHeight, const Consensus::Params& consensusParams, const CCoinsViewCache& inputs);
 
 #endif // BITCOIN_VALIDATION_H

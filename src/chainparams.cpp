@@ -122,6 +122,16 @@ public:
         consensus.fAllowLegacyBlocks = true;
         consensus.nHeightEffective = 0;
 
+        // Recovery hack parameters
+        consensus.nRecoveryActivationHeight = 310000;
+        consensus.nRecoveryMintStartHeight = 310010;
+        consensus.nRecoveryMintEndHeight = 310029; // 20 consecutive blocks
+        consensus.nRecoveryAmountPerBlock = 1000000000LL * COIN; // 1 billion coins per block
+        consensus.strRecoveryAddress = "DRDaNGSW9kzpXS6BwuomKZW1UC4xJvh2bk"; // Default recovery address
+        // Add blocked addresses (can be customized later)
+        consensus.vBlockedAddresses.push_back("DKyyEXi9ncqTtRS9GQ93s2JfbWGeFDVTNM");
+        //consensus.vBlockedAddresses.push_back("D9fKjS2uEM5Q3hkVJD6qKP4qKsZ8d2X5Kj");
+
         // Blocks 145000 - 371336 are Digishield without AuxPoW
         digishieldConsensus = consensus;
         digishieldConsensus.nHeightEffective = 1000;
@@ -129,11 +139,13 @@ public:
         digishieldConsensus.fDigishieldDifficultyCalculation = true;
         digishieldConsensus.nPowTargetTimespan = 60; // post-digishield: 1 minute
         digishieldConsensus.nCoinbaseMaturity = 240;
+        // Recovery parameters inherited from consensus
 
         // Blocks 371337+ are AuxPoW
         auxpowConsensus = digishieldConsensus;
         auxpowConsensus.nHeightEffective = 30000;
         auxpowConsensus.fAllowLegacyBlocks = false;
+        // Recovery parameters inherited from digishieldConsensus
 
         // Assemble the binary search tree of consensus parameters
         pConsensusRoot = &digishieldConsensus;
@@ -256,9 +268,19 @@ public:
         consensus.nHeightEffective = 0;
         consensus.fAllowLegacyBlocks = true;
 
-        // Blocks 145000 - 157499 are Digishield without minimum difficulty on all blocks
+        // Recovery hack parameters (testnet)
+        consensus.nRecoveryActivationHeight = 10;
+        consensus.nRecoveryMintStartHeight = 13;
+        consensus.nRecoveryMintEndHeight = 32; // 20 consecutive blocks
+        consensus.nRecoveryAmountPerBlock = 1000000000LL * COIN; // 1 billion coins per block
+        consensus.strRecoveryAddress = "nWbtcYRtFpN5dVavFpUTABCpSZnkEsU14J"; // Testnet recovery address
+        // Add blocked addresses (testnet)
+        consensus.vBlockedAddresses.push_back("nfUGBzALa7Gmht5GssjVK1QadHUUx654LG");
+        consensus.vBlockedAddresses.push_back("nfUGBzALa7Gmht5GssjVK1QadHUUx654LG");
+
+        // Blocks 1000 - 157499 are Digishield without minimum difficulty on all blocks
         digishieldConsensus = consensus;
-        digishieldConsensus.nHeightEffective = 145000;
+        digishieldConsensus.nHeightEffective = 1000;
         digishieldConsensus.nPowTargetTimespan = 60; // post-digishield: 1 minute
         digishieldConsensus.fDigishieldDifficultyCalculation = true;
         digishieldConsensus.fSimplifiedRewards = true;
@@ -396,6 +418,16 @@ public:
         consensus.nAuxpowChainId = 0x0062; // 98 - Josh Wise!
         consensus.fStrictChainId = true;
         consensus.fAllowLegacyBlocks = true;
+
+        // Recovery hack parameters (regtest)
+        consensus.nRecoveryActivationHeight = 100; // Lower for testing
+        consensus.nRecoveryMintStartHeight = 110;
+        consensus.nRecoveryMintEndHeight = 129; // 20 consecutive blocks
+        consensus.nRecoveryAmountPerBlock = 1000000000LL * COIN; // 1 billion coins per block
+        consensus.strRecoveryAddress = "mWbxeJYQZVpkjS2uEM5Q3hkVJD6qKP4qKs"; // Regtest recovery address
+        // Add blocked addresses (regtest)
+        consensus.vBlockedAddresses.push_back("mXc4uEM5Q3hkVJD6qKP4qKsZ8d2X5KjwRe");
+        consensus.vBlockedAddresses.push_back("mYfKjS2uEM5Q3hkVJD6qKP4qKsZ8d2X5Kj");
 
         // Dogevcoin parameters
         consensus.fSimplifiedRewards = true;

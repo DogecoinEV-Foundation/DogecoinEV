@@ -191,12 +191,29 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     CMutableTransaction coinbaseTx;
     coinbaseTx.vin.resize(1);
     coinbaseTx.vin[0].prevout.SetNull();
-    coinbaseTx.vout.resize(1);
-    coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
-    coinbaseTx.vout[0].nValue = nFees + GetDogecoinEVBlockSubsidy(nHeight, consensus, pindexPrev->GetBlockHash(
-));
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
+    
+    CAmount blockSubsidy = GetDogecoinEVBlockSubsidy(nHeight, consensus, pindexPrev->GetBlockHash());
+    CAmount recoveryAmount = GetRecoveryAmount(nHeight, consensus);
+    
+    if (recoveryAmount > 0) {
+        // Special coinbase with 2 outputs: miner reward + recovery amount
+        coinbaseTx.vout.resize(2);
+        // Output 0: Original reward + fees to miner
+        coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
+        coinbaseTx.vout[0].nValue = nFees + blockSubsidy;
+        // Output 1: Recovery amount to recovery address
+        coinbaseTx.vout[1].scriptPubKey = GetRecoveryScript(consensus);
+        coinbaseTx.vout[1].nValue = recoveryAmount;
+    } else {
+        // Normal coinbase with 1 output
+        coinbaseTx.vout.resize(1);
+        coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
+        coinbaseTx.vout[0].nValue = nFees + blockSubsidy;
+    }
+    
     pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
+    
     pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, consensus);
     pblocktemplate->vTxFees[0] = -nFees;
 
@@ -268,6 +285,9 @@ bool BlockAssembler::TestPackageTransactions(const CTxMemPool::setEntries& packa
             return false;
         if (!fIncludeWitness && it->GetTx().HasWitness())
             return false;
+        
+        // Note: Blocked address filtering is handled at mempool acceptance level
+            
         if (fNeedSizeAccounting) {
             uint64_t nTxSize = ::GetSerializeSize(it->GetTx(), SER_NETWORK, PROTOCOL_VERSION);
             if (nPotentialBlockSize + nTxSize >= nBlockMaxSize) {

@@ -39,6 +39,8 @@
 #include "validationinterface.h"
 #include "versionbits.h"
 #include "warnings.h"
+#include "script/standard.h"
+#include "base58.h"
 
 #include <atomic>
 #include <sstream>
@@ -98,6 +100,74 @@ static void CheckBlockIndex(const Consensus::Params& consensusParams);
 
 /** Constant stuff for coinbase transactions we create: */
 CScript COINBASE_FLAGS;
+
+/**
+ * Check if an address is blocked by the recovery hack
+ */
+bool IsAddressBlocked(const std::string& address, int nHeight, const Consensus::Params& consensusParams)
+{
+    // Only check after activation height
+    if (nHeight < consensusParams.nRecoveryActivationHeight)
+        return false;
+        
+    // Check if address is in blocked list
+    for (const std::string& blockedAddr : consensusParams.vBlockedAddresses) {
+        if (address == blockedAddr)
+            return true;
+    }
+    return false;
+}
+
+/**
+ * Check if a transaction involves blocked addresses
+ */
+bool CheckTransactionForBlockedAddresses(const CTransaction& tx, int nHeight, const Consensus::Params& consensusParams)
+{
+    // Only check after activation height
+    if (nHeight < consensusParams.nRecoveryActivationHeight)
+        return true;
+        
+    // Check all outputs for blocked addresses
+    for (const CTxOut& txout : tx.vout) {
+        CTxDestination dest;
+        if (ExtractDestination(txout.scriptPubKey, dest)) {
+            std::string address = CBitcoinAddress(dest).ToString();
+            if (IsAddressBlocked(address, nHeight, consensusParams)) {
+                return false; // Transaction sends to blocked address
+            }
+        }
+    }
+    return true;
+}
+
+/**
+ * Check if a transaction involves blocked addresses (with UTXO access)
+ */
+bool CheckTransactionForBlockedAddressesWithInputs(const CTransaction& tx, int nHeight, const Consensus::Params& consensusParams, const CCoinsViewCache& inputs)
+{
+    // Only check after activation height
+    if (nHeight < consensusParams.nRecoveryActivationHeight)
+        return true;
+        
+    // Check all inputs for blocked addresses (skip coinbase)
+    if (!tx.IsCoinBase()) {
+        for (const CTxIn& txin : tx.vin) {
+            const COutPoint& prevout = txin.prevout;
+            const CCoins* coins = inputs.AccessCoins(prevout.hash);
+            if (coins && coins->IsAvailable(prevout.n)) {
+                CTxDestination dest;
+                if (ExtractDestination(coins->vout[prevout.n].scriptPubKey, dest)) {
+                    std::string address = CBitcoinAddress(dest).ToString();
+                    if (IsAddressBlocked(address, nHeight, consensusParams)) {
+                        return false; // Transaction spends from blocked address
+                    }
+                }
+            }
+        }
+    }
+    
+    return true;
+}
 
 const std::string strMessageMagic = "DogecoinEV Signed Message:\n";
 
@@ -526,11 +596,20 @@ int64_t GetTransactionSigOpCost(const CTransaction& tx, const CCoinsViewCache& i
 
 bool CheckTransaction(const CTransaction& tx, CValidationState &state, bool fCheckDuplicateInputs)
 {
+    return CheckTransaction(tx, state, fCheckDuplicateInputs, -1, Params().GetConsensus(0));
+}
+
+bool CheckTransaction(const CTransaction& tx, CValidationState &state, bool fCheckDuplicateInputs, int nHeight, const Consensus::Params& consensusParams)
+{
     // Basic checks that don't depend on any context
     if (tx.vin.empty())
         return state.DoS(10, false, REJECT_INVALID, "bad-txns-vin-empty");
     if (tx.vout.empty())
         return state.DoS(10, false, REJECT_INVALID, "bad-txns-vout-empty");
+        
+    // Check for blocked addresses (recovery hack)
+    if (nHeight >= 0 && !CheckTransactionForBlockedAddresses(tx, nHeight, consensusParams))
+        return state.DoS(100, false, REJECT_INVALID, "bad-txns-blocked-address");
     // Size limits (this doesn't take the witness into account, as that hasn't been checked for malleability)
     if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) > MAX_BLOCK_BASE_SIZE)
         return state.DoS(100, false, REJECT_INVALID, "bad-txns-oversize");
@@ -744,6 +823,10 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState& state, const C
         // Check for non-standard pay-to-script-hash in inputs
         if (fRequireStandard && !AreInputsStandard(tx, view))
             return state.Invalid(false, REJECT_NONSTANDARD, "bad-txns-nonstandard-inputs");
+        
+        // Check for blocked addresses (recovery hack)
+        if (!CheckTransactionForBlockedAddressesWithInputs(tx, chainActive.Height() + 1, Params().GetConsensus(chainActive.Height() + 1), view))
+            return state.DoS(100, false, REJECT_INVALID, "bad-txns-blocked-address");
 
         // Check for non-standard witness in P2WSH
         if (tx.HasWitness() && fRequireStandard && !IsWitnessStandard(tx, view))
@@ -1994,10 +2077,13 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime3 - nTime2), 0.001 * (nTime3 - nTime2) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime3 - nTime2) / (nInputs-1), nTimeConnect * 0.000001);
 
     CAmount blockReward = nFees + GetDogecoinEVBlockSubsidy(pindex->nHeight, chainparams.GetConsensus(pindex->nHeight), hashPrevBlock);
-    if (block.vtx[0]->GetValueOut() > blockReward)
+    CAmount recoveryAmount = GetRecoveryAmount(pindex->nHeight, chainparams.GetConsensus(pindex->nHeight));
+    CAmount totalAllowedReward = blockReward + recoveryAmount;
+    
+    if (block.vtx[0]->GetValueOut() > totalAllowedReward)
         return state.DoS(100,
                          error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
-                               block.vtx[0]->GetValueOut(), blockReward),
+                               block.vtx[0]->GetValueOut(), totalAllowedReward),
                                REJECT_INVALID, "bad-cb-amount");
 
     if (!control.Wait())
@@ -2979,7 +3065,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
         if (block.vtx[i]->IsCoinBase())
             return state.DoS(100, false, REJECT_INVALID, "bad-cb-multiple", false, "more than one coinbase");
 
-    // Check transactions
+    // Check transactions (use height-aware validation when possible)
     for (const auto& tx : block.vtx)
         if (!CheckTransaction(*tx, state, true))
             return state.Invalid(false, state.GetRejectCode(), state.GetRejectReason(),
@@ -3142,6 +3228,36 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, const CB
     for (const auto& tx : block.vtx) {
         if (!IsFinalTx(*tx, nHeight, nLockTimeCutoff)) {
             return state.DoS(10, false, REJECT_INVALID, "bad-txns-nonfinal", false, "non-final transaction");
+        }
+        
+        // Note: Blocked address filtering is now done at mining level, not validation level
+    }
+    
+    // Check for recovery coinbase at specified height
+    if (IsRecoveryMintHeight(nHeight, consensusParams)) {
+        const CTransaction& coinbase = *block.vtx[0];
+        CAmount expectedRecoveryAmount = GetRecoveryAmount(nHeight, consensusParams);
+        
+        // Coinbase should have exactly 2 outputs during recovery blocks
+        if (coinbase.vout.size() != 2) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-recovery-coinbase-outputs", false, "recovery coinbase must have exactly 2 outputs");
+        }
+        
+        // Second output should be the recovery amount
+        if (coinbase.vout[1].nValue != expectedRecoveryAmount) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-recovery-coinbase-amount", false, "invalid recovery amount in coinbase");
+        }
+        
+        // Verify recovery output script matches expected recovery address
+        CScript expectedRecoveryScript = GetRecoveryScript(consensusParams);
+        if (coinbase.vout[1].scriptPubKey != expectedRecoveryScript) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-recovery-coinbase-script", false, "invalid recovery script in coinbase");
+        }
+    } else {
+        // Non-recovery blocks should have normal coinbase with 1 output
+        const CTransaction& coinbase = *block.vtx[0];
+        if (coinbase.vout.size() != 1) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-coinbase-outputs", false, "non-recovery coinbase must have exactly 1 output");
         }
     }
 

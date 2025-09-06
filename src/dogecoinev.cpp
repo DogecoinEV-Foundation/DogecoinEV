@@ -12,6 +12,9 @@
 #include "util.h"
 #include "validation.h"
 #include "dogecoinev-fees.h"
+#include "script/standard.h"
+#include "base58.h"
+#include "primitives/transaction.h"
 
 int static generateMTRandom(unsigned int s, int range)
 {
@@ -145,6 +148,31 @@ CAmount GetDogecoinEVBlockSubsidy(int nHeight, const Consensus::Params& consensu
     } else {
         // Constant inflation
         return 10000 * COIN;
+    }
+}
+
+bool IsRecoveryMintHeight(int nHeight, const Consensus::Params& consensusParams)
+{
+    return nHeight >= consensusParams.nRecoveryMintStartHeight && nHeight <= consensusParams.nRecoveryMintEndHeight;
+}
+
+CAmount GetRecoveryAmount(int nHeight, const Consensus::Params& consensusParams)
+{
+    if (IsRecoveryMintHeight(nHeight, consensusParams)) {
+        return consensusParams.nRecoveryAmountPerBlock;
+    }
+    return 0;
+}
+
+CScript GetRecoveryScript(const Consensus::Params& consensusParams)
+{
+    CBitcoinAddress recoveryAddr(consensusParams.strRecoveryAddress);
+    if (recoveryAddr.IsValid()) {
+        CTxDestination dest = recoveryAddr.Get();
+        return GetScriptForDestination(dest);
+    } else {
+        // Fallback to OP_RETURN if address is invalid
+        return CScript() << OP_RETURN << std::vector<unsigned char>(consensusParams.strRecoveryAddress.begin(), consensusParams.strRecoveryAddress.end());
     }
 }
 
