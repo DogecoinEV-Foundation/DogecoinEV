@@ -3238,28 +3238,22 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, const CB
         const CTransaction& coinbase = *block.vtx[0];
         CAmount expectedRecoveryAmount = GetRecoveryAmount(nHeight, consensusParams);
         
-        // Coinbase should have exactly 2 outputs during recovery blocks
-        if (coinbase.vout.size() != 2) {
-            return state.DoS(100, false, REJECT_INVALID, "bad-recovery-coinbase-outputs", false, "recovery coinbase must have exactly 2 outputs");
-        }
-        
-        // Second output should be the recovery amount
-        if (coinbase.vout[1].nValue != expectedRecoveryAmount) {
-            return state.DoS(100, false, REJECT_INVALID, "bad-recovery-coinbase-amount", false, "invalid recovery amount in coinbase");
-        }
-        
-        // Verify recovery output script matches expected recovery address
+        // Verify recovery amount exists in coinbase outputs
+        bool foundRecoveryOutput = false;
         CScript expectedRecoveryScript = GetRecoveryScript(consensusParams);
-        if (coinbase.vout[1].scriptPubKey != expectedRecoveryScript) {
-            return state.DoS(100, false, REJECT_INVALID, "bad-recovery-coinbase-script", false, "invalid recovery script in coinbase");
+        
+        for (const CTxOut& output : coinbase.vout) {
+            if (output.nValue == expectedRecoveryAmount && output.scriptPubKey == expectedRecoveryScript) {
+                foundRecoveryOutput = true;
+                break;
+            }
         }
-    } else {
-        // Non-recovery blocks should have normal coinbase with 1 output
-        const CTransaction& coinbase = *block.vtx[0];
-        if (coinbase.vout.size() != 1) {
-            return state.DoS(100, false, REJECT_INVALID, "bad-coinbase-outputs", false, "non-recovery coinbase must have exactly 1 output");
+        
+        if (!foundRecoveryOutput) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-recovery-coinbase-missing", false, "recovery output missing from coinbase");
         }
     }
+    // No special coinbase validation outside recovery period - use original Bitcoin/Dogecoin rules
 
     // Enforce rule that the coinbase starts with serialized block height
     if (nHeight >= consensusParams.BIP34Height)
